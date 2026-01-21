@@ -104,6 +104,18 @@ export class WGDashboardClient {
     }
   }
 
+  async applyConfig(): Promise<boolean> {
+    try {
+      const response = await this.client.post(
+        `/api/applyConfig/${encodeURIComponent(this.configName)}`
+      );
+      return response.data?.status === true;
+    } catch (error: any) {
+      console.error('Error applying configuration:', error.message);
+      return false;
+    }
+  }
+
   async restrictPeer(peerId: string, restrict: boolean): Promise<boolean> {
     try {
       const response = await this.client.post(
@@ -111,7 +123,11 @@ export class WGDashboardClient {
         { peers: [peerId], restrict }
       );
 
-      return response.data?.status === true;
+      if (response.data?.status === true) {
+        await this.applyConfig();
+        return true;
+      }
+      return false;
     } catch (error: any) {
       console.error('Error restricting peer:', error.message);
       return false;

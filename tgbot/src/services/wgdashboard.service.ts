@@ -89,6 +89,23 @@ export class WGDashboardService {
     }
   }
 
+  async applyConfig(): Promise<boolean> {
+    try {
+      const response = await this.client.post(
+        `/api/applyConfig/${encodeURIComponent(this.configName)}`
+      );
+      if (response.data?.status === true) {
+        logger.info('Configuration applied successfully');
+        return true;
+      }
+      logger.warn('Failed to apply configuration', { response: response.data });
+      return false;
+    } catch (error: any) {
+      logger.error('Error applying configuration', { error: error.message });
+      return false;
+    }
+  }
+
   async addPeer(options: {
     name?: string;
     dns?: string;
@@ -121,13 +138,16 @@ export class WGDashboardService {
       );
 
       if (response.data?.status === true) {
+        // Apply configuration after adding peer
+        await this.applyConfig();
+
         const createdPeer = this.extractCreatedPeerFromResponse(response.data, payload.name);
         if (createdPeer) {
           logger.info('Peer created successfully', { peerId: createdPeer.id });
           return createdPeer;
         }
 
-        logger.info('Peer created successfully');
+        logger.info('Peer created successfully, fetching list...');
         const peers = await this.getPeers();
         return peers[peers.length - 1] || null;
       }
@@ -221,7 +241,11 @@ export class WGDashboardService {
         { peers: [peerId] }
       );
 
-      return response.data?.status === true;
+      if (response.data?.status === true) {
+        await this.applyConfig();
+        return true;
+      }
+      return false;
     } catch (error) {
       logger.error('Error deleting peer', { error, peerId });
       return false;
@@ -235,7 +259,11 @@ export class WGDashboardService {
         { peers: [peerId], restrict }
       );
 
-      return response.data?.status === true;
+      if (response.data?.status === true) {
+        await this.applyConfig();
+        return true;
+      }
+      return false;
     } catch (error) {
       logger.error('Error restricting peer', { error, peerId, restrict });
       return false;
