@@ -10,18 +10,20 @@ export function createLinksRouter(
   const router = Router();
 
   // Создание новой share link
-  router.post('/', async (req: Request, res: Response) => {
+  router.post('/', async (req: Request, res: Response): Promise<void> => {
     try {
       const { peerId, expiryHours = 24, maxUsage = 1, userId, createdBy } = req.body;
 
       if (!peerId) {
-        return res.status(400).json({ error: 'peerId is required' });
+        res.status(400).json({ error: 'peerId is required' });
+        return;
       }
 
       // Проверяем, существует ли пир
       const peer = await wgClient.getPeerById(peerId);
       if (!peer) {
-        return res.status(404).json({ error: 'Peer not found' });
+        res.status(404).json({ error: 'Peer not found' });
+        return;
       }
 
       const link = db.createShareLink(peerId, expiryHours, maxUsage, userId, createdBy);
@@ -41,25 +43,28 @@ export function createLinksRouter(
   });
 
   // Получение информации о link
-  router.get('/:id', async (req: Request, res: Response) => {
+  router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const link = db.getShareLink(id);
 
       if (!link) {
-        return res.status(404).json({ error: 'Link not found' });
+        res.status(404).json({ error: 'Link not found' });
+        return;
       }
 
       // Проверяем, истек ли срок действия
       if (Date.now() > link.expiresAt) {
         db.deactivateLink(id);
-        return res.status(410).json({ error: 'Link expired' });
+        res.status(410).json({ error: 'Link expired' });
+        return;
       }
 
       // Проверяем, не превышен ли лимит использования
       if (link.usageCount >= link.maxUsageCount) {
         db.deactivateLink(id);
-        return res.status(410).json({ error: 'Usage limit exceeded' });
+        res.status(410).json({ error: 'Usage limit exceeded' });
+        return;
       }
 
       res.json(link);
@@ -70,7 +75,7 @@ export function createLinksRouter(
   });
 
   // Получение списка активных ссылок
-  router.get('/', async (req: Request, res: Response) => {
+  router.get('/', async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.query.userId ? parseInt(req.query.userId as string, 10) : undefined;
       const links = db.getActiveLinks(userId);
@@ -83,13 +88,14 @@ export function createLinksRouter(
   });
 
   // Деактивация ссылки
-  router.delete('/:id', async (req: Request, res: Response) => {
+  router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const success = db.deactivateLink(id);
 
       if (!success) {
-        return res.status(404).json({ error: 'Link not found' });
+        res.status(404).json({ error: 'Link not found' });
+        return;
       }
 
       logger.info('Share link deactivated', { linkId: id });

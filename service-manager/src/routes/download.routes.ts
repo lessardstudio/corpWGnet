@@ -9,7 +9,7 @@ export function createDownloadRouter(
 ): Router {
   const router = Router();
 
-  router.get('/:id', async (req: Request, res: Response) => {
+  router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const link = db.getShareLink(id);

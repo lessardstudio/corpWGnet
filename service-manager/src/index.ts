@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import path from 'path';
 import { DatabaseService } from './services/database.service';
 import { WGDashboardClient } from './services/wgdashboard.service';
 import { createLinksRouter } from './routes/links.routes';
@@ -41,7 +40,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Логирование запросов
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   logger.info('Incoming request', {
     method: req.method,
     path: req.path,
@@ -51,7 +50,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Health check
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
@@ -66,7 +65,7 @@ app.use('/api/links', createLinksRouter(db, wgClient));
 app.use('/download', createDownloadRouter(db, wgClient));
 
 // Root route
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -140,12 +139,12 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // 404 handler
-app.use((req: Request, res: Response) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found' });
 });
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   logger.error('Unhandled error', { 
     error: err.message,
     stack: err.stack,

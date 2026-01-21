@@ -19,8 +19,6 @@ export class DatabaseService {
   private db: Database.Database;
 
   constructor(dbPath: string) {
-    const dir = path.dirname(dbPath);
-    
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     
