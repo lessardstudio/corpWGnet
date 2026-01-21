@@ -83,7 +83,7 @@ export class WGDashboardService {
   async getPeers(): Promise<WireGuardPeer[]> {
     try {
       const response = await this.client.get(
-        `/api/getWireguardConfigurations/${encodeURIComponent(this.configName)}/peers`
+        `/api/getPeers/${encodeURIComponent(this.configName)}`
       );
 
       if (response.data?.status === true && Array.isArray(response.data.data)) {
