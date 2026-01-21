@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # WGDashboard - основная панель управления WireGuard
   wgdashboard:
@@ -26,7 +28,6 @@ services:
     env_file:
       - .env
     depends_on:
-      - wgdashboard
       - service-manager
     networks:
       - wg-network

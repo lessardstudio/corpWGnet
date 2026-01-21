@@ -88,7 +88,10 @@ export class ConfigHandler {
         '⏳ Генерирую файл конфигурации...'
       );
 
-      const config = await this.wgService.downloadPeerConfig(peer.id);
+      const configFromPeer = typeof peer.config === 'string' ? peer.config : null;
+      const config = configFromPeer && configFromPeer.includes('[Interface]')
+        ? configFromPeer
+        : await this.wgService.downloadPeerConfig(peer.id);
       
       if (!config) {
         logger.error('Failed to download peer config', { peerId: peer.id, name: peerName });
