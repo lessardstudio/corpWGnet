@@ -8,27 +8,35 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
+    "test": "jest",
     "format": "prettier --write \"src/**/*.ts\""
   },
-  "keywords": ["wireguard", "telegram", "bot"],
+  "keywords": [
+    "wireguard",
+    "telegram",
+    "bot"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "grammy": "^1.21.1",
     "axios": "^1.6.5",
+    "better-sqlite3": "^9.2.2",
     "dotenv": "^16.4.1",
-    "winston": "^3.11.0",
+    "grammy": "^1.21.1",
     "qrcode": "^1.5.3",
-    "better-sqlite3": "^9.2.2"
+    "winston": "^3.11.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.11.5",
     "@types/qrcode": "^1.5.5",
-    "@types/better-sqlite3": "^7.6.8",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
+    "jest": "^30.2.0",
     "prettier": "^3.2.4",
+    "ts-jest": "^29.4.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
   }

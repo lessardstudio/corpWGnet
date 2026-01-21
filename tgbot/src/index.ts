@@ -50,13 +50,10 @@ async function main() {
     }
     logger.info('Successfully connected to WGDashboard');
 
-    // Получаем информацию о боте
-    const botInfo = await bot.api.getMe();
-
     // Инициализируем обработчики
     const configHandler = new ConfigHandler(wgService, managerService, qrGenerator, authService);
     const adminHandler = new AdminHandler(wgService, config.adminIds);
-    const authHandler = new AuthHandler(authService, botInfo.username);
+    const authHandler = new AuthHandler(authService);
 
     // Middleware для логирования
     bot.use(async (ctx, next) => {
