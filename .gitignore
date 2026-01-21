@@ -42,3 +42,4 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+.trae/documents/Диагностика и исправление выдачи конфигурации в tgbot (WGDashboard API несовместимость).md

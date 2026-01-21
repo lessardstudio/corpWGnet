@@ -29,6 +29,45 @@ describe('WGDashboardService', () => {
     expect(client.get).toHaveBeenCalled();
   });
 
+  test('getPeers ignores interface config list responses', async () => {
+    const client = {
+      get: jest.fn(),
+      post: jest.fn()
+    };
+
+    (axios as any).create.mockReturnValue(client);
+
+    let call = 0;
+    client.get.mockImplementation(() => {
+      call += 1;
+      if (call === 1) {
+        return Promise.resolve({
+          data: {
+            status: true,
+            data: [
+              {
+                Name: 'wg0',
+                Protocol: 'wg',
+                ListenPort: '51820',
+                PublicKey: 'SERVER_PUBKEY',
+                TotalPeers: 7,
+                ConnectedPeers: 0
+              }
+            ]
+          }
+        });
+      }
+      return Promise.resolve({
+        data: { status: true, data: [{ public_key: 'pk2', name: 'n2', allowed_ips: ['10.0.0.3/32'] }] }
+      });
+    });
+
+    const svc = new WGDashboardService('http://wgdashboard:10086', 'k', 'wg0');
+    const peers = await svc.getPeers();
+
+    expect((peers as any)[0].id).toBe('pk2');
+  });
+
   test('downloadPeerConfig falls back across endpoints', async () => {
     const client = {
       get: jest.fn(),

@@ -27,15 +27,39 @@ export class WGDashboardService {
 
   private extractPeersFromResponse(data: any): any[] | null {
     if (!data) return null;
+    if (this.isInterfaceConfigListResponse(data)) return null;
     if (data?.status === true && Array.isArray(data.data)) return data.data;
     if (Array.isArray(data.data)) return data.data;
     if (Array.isArray(data.peers)) return data.peers;
     if (Array.isArray(data?.data?.peers)) return data.data.peers;
+    if (Array.isArray(data?.data?.Peers)) return data.data.Peers;
+    if (Array.isArray(data?.peers?.data)) return data.peers.data;
+    if (Array.isArray(data?.data?.peers?.data)) return data.data.peers.data;
     return null;
+  }
+
+  private isInterfaceConfigListResponse(data: any): boolean {
+    const list =
+      Array.isArray(data?.data) ? data.data :
+      Array.isArray(data?.data?.data) ? data.data.data :
+      null;
+
+    if (!list || list.length === 0) return false;
+
+    return list.every((item: any) => this.isInterfaceConfig(item));
+  }
+
+  private isInterfaceConfig(item: any): boolean {
+    if (!item || typeof item !== 'object') return false;
+    if (typeof item.Name !== 'string') return false;
+    if ('TotalPeers' in item || 'ConnectedPeers' in item) return true;
+    if ('ListenPort' in item && 'Protocol' in item && 'PublicKey' in item) return true;
+    return false;
   }
 
   private normalizePeer(raw: any): WireGuardPeer | null {
     if (!raw || typeof raw !== 'object') return null;
+    if (this.isInterfaceConfig(raw)) return null;
 
     const id =
       raw.id ??
@@ -78,7 +102,9 @@ export class WGDashboardService {
     if (!data || data?.status !== true) return null;
 
     const base =
+      Array.isArray(data?.data) ? data.data[0] :
       data?.data && typeof data.data === 'object' ? data.data :
+      Array.isArray(data?.peers) ? data.peers[0] :
       data?.peer && typeof data.peer === 'object' ? data.peer :
       null;
 
@@ -164,7 +190,7 @@ export class WGDashboardService {
         payload
       );
 
-      logger.debug('addPeer response', { data: response.data });
+      logger.debug('addPeer response received', { status: response.data?.status, keys: Object.keys(response.data || {}) });
 
       if (response.data?.status === true) {
         // Restart interface to apply changes
@@ -176,6 +202,7 @@ export class WGDashboardService {
           return createdPeer;
         }
 
+        logger.warn('Peer created but id not found in response, falling back to peer list', { configName: this.configName });
         logger.info('Peer created successfully, fetching list...');
         const peers = await this.getPeers();
         const byName = peers.find(p => p.name === payload.name);
@@ -202,8 +229,7 @@ export class WGDashboardService {
       { method: 'post', url: `/api/getPeers`, data: { configName: this.configName } },
       { method: 'post', url: `/api/getPeers`, data: { configuration: this.configName } },
       { method: 'get', url: `/api/getWireguardConfiguration/${encodeURIComponent(this.configName)}` },
-      { method: 'get', url: `/api/getWireguardConfigurations/${encodeURIComponent(this.configName)}` },
-      { method: 'get', url: `/api/getWireguardConfigurations` }
+      { method: 'get', url: `/api/getWireguardConfigurationInformation/${encodeURIComponent(this.configName)}` }
     ];
 
     for (const candidate of candidates) {
@@ -219,7 +245,10 @@ export class WGDashboardService {
             .map((p) => this.normalizePeer(p))
             .filter((p): p is WireGuardPeer => !!p);
 
-          if (normalized.length > 0) return normalized;
+          if (normalized.length > 0) {
+            logger.debug('Peers fetched successfully', { candidate });
+            return normalized;
+          }
         }
       } catch (error: any) {
         const status = error?.response?.status || error?.status;
@@ -250,7 +279,7 @@ export class WGDashboardService {
     const encodedPeerId = encodeURIComponent(peerId);
     const doublyEncodedPeerId = encodeURIComponent(encodedPeerId);
 
-    const peerIdVariants = Array.from(new Set([peerId, encodedPeerId, doublyEncodedPeerId]));
+    const peerIdVariants = Array.from(new Set([encodedPeerId, doublyEncodedPeerId]));
 
     const attemptResults: Array<{ url: string; status?: number; bodySnippet?: string }> = [];
 

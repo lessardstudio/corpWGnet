@@ -89,9 +89,16 @@ export class ConfigHandler {
       );
 
       const configFromPeer = typeof peer.config === 'string' ? peer.config : null;
-      const config = configFromPeer && configFromPeer.includes('[Interface]')
-        ? configFromPeer
-        : await this.wgService.downloadPeerConfig(peer.id);
+      let configSource: 'peer' | 'api' = 'api';
+      let config: string | null = null;
+
+      if (configFromPeer && configFromPeer.includes('[Interface]')) {
+        configSource = 'peer';
+        config = configFromPeer;
+      } else {
+        logger.info('Downloading peer config', { peerId: peer.id });
+        config = await this.wgService.downloadPeerConfig(peer.id);
+      }
       
       if (!config) {
         logger.error('Failed to download peer config', { peerId: peer.id, name: peerName });
@@ -103,11 +110,13 @@ export class ConfigHandler {
         return;
       }
 
+      logger.info('Peer config resolved', { peerId: peer.id, source: configSource, length: config.length });
+
       // Создаем share link
       const shareLink = await this.managerService.createShareLink(peer.id, {
         expiryHours: 24,
         maxUsage: 3,
-        config: config // Pass the actual config content
+        config: config
       });
 
       // Генерируем QR код
