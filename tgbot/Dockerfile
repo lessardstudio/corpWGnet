@@ -9,8 +9,8 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Устанавливаем зависимости
-RUN npm ci --only=production && npm cache clean --force
+# Устанавливаем все зависимости (включая devDependencies для сборки)
+RUN npm install && npm cache clean --force
 
 # Копируем исходный код
 COPY src ./src
@@ -18,10 +18,10 @@ COPY src ./src
 # Компилируем TypeScript
 RUN npm run build
 
-# Создаем директорию для логов
-RUN mkdir -p /app/logs && chmod 777 /app/logs
+# Создаем директорию для логов и данных
+RUN mkdir -p /app/logs /app/data && chmod 777 /app/logs /app/data
 
-# Удаляем dev dependencies
+# Удаляем dev dependencies после сборки
 RUN npm prune --production
 
 # Запускаем приложение
