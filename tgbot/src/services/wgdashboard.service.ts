@@ -136,22 +136,20 @@ export class WGDashboardService {
 
   async restartInterface(): Promise<boolean> {
     try {
-      // Пытаемся перезапустить интерфейс через API
-      // В WGDashboard v4.3.0 для этого используется restartWireguardConfiguration
       const response = await this.client.post(
         `/api/restartWireguardConfiguration/${encodeURIComponent(this.configName)}`
       );
       
       if (response.data?.status === true) {
         logger.info('Interface restarted successfully');
+        // Даём время на применение конфигурации
+        await new Promise(resolve => setTimeout(resolve, 2000));
         return true;
       }
       
       logger.warn('Failed to restart interface', { response: response.data });
       return false;
     } catch (error: any) {
-      // Игнорируем 404, так как это может означать отсутствие эндпоинта
-      // (в старых версиях может не быть)
       if (error.response?.status !== 404) {
         logger.error('Error restarting interface', { error: error.message });
       }

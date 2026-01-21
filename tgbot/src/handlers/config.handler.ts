@@ -5,6 +5,7 @@ import { QRCodeGenerator } from '../utils/qrcode';
 import { AuthService } from '../services/auth.service';
 import logger from '../utils/logger';
 import { InputFile } from 'grammy';
+import { normalizeWireGuardClientConfig } from '../utils/wireguard-config';
 
 export class ConfigHandler {
   constructor(
@@ -81,6 +82,9 @@ export class ConfigHandler {
 
       logger.info('Peer created', { peerId: peer.id, name: peerName });
 
+      // ВАЖНО: Даём WGDashboard время применить конфигурацию после restart
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // Получаем конфигурацию
       await ctx.api.editMessageText(
         ctx.chat!.id,
@@ -110,6 +114,23 @@ export class ConfigHandler {
         return;
       }
 
+      const normalizedConfig = normalizeWireGuardClientConfig(config, {
+        endpoint: (globalThis as any).process?.env?.WG_ENDPOINT,
+        allowedIps: (globalThis as any).process?.env?.WG_ALLOWED_IPS,
+        dns: (globalThis as any).process?.env?.WG_DNS
+      });
+
+      if (!normalizedConfig) {
+        logger.error('Resolved config is not a valid client config', { peerId: peer.id, source: configSource });
+        await ctx.api.editMessageText(
+          ctx.chat!.id,
+          statusMsg.message_id,
+          '❌ Получен некорректный файл конфигурации. Попробуйте позже.'
+        );
+        return;
+      }
+
+      config = normalizedConfig;
       logger.info('Peer config resolved', { peerId: peer.id, source: configSource, length: config.length });
 
       // Создаем share link
