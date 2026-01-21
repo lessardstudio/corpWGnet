@@ -218,41 +218,53 @@ export class WGDashboardService {
   }
 
   async downloadPeerConfig(peerId: string): Promise<string | null> {
+    // Ensure peerId is properly encoded, especially if it's a public key ending with '='
+    const encodedPeerId = encodeURIComponent(peerId);
+    
     const urls = [
-      `/api/downloadPeer/${encodeURIComponent(this.configName)}/${encodeURIComponent(peerId)}`,
-      `/api/downloadPeer/${encodeURIComponent(peerId)}`,
-      `/api/download/${encodeURIComponent(peerId)}`
+      `/api/downloadPeer/${encodeURIComponent(this.configName)}/${encodedPeerId}`,
+      `/api/downloadPeer/${encodedPeerId}`,
+      `/api/download/${encodedPeerId}`
     ];
+
+    logger.debug('Attempting to download config', { peerId, urls });
 
     for (const url of urls) {
       try {
         const response = await this.client.get(url, {
-          responseType: 'text' // Force text response to avoid auto-JSON parsing issues
+          responseType: 'text'
         });
 
         if (response.data) {
-          // Check if response is JSON error despite text request
+          // Check if response is JSON error
           if (typeof response.data === 'string' && response.data.trim().startsWith('{')) {
              try {
                const json = JSON.parse(response.data);
-               if (json.status === false) continue;
+               if (json.status === false) {
+                 logger.debug('Config download returned JSON error', { url, json });
+                 continue;
+               }
              } catch (e) {
-               // Not valid JSON, probably config file
-               return response.data;
+               // Not valid JSON, treat as config content
              }
           }
           
+          logger.info('Config downloaded successfully', { url });
           return typeof response.data === 'string'
             ? response.data
             : JSON.stringify(response.data);
         }
       } catch (error: any) {
         const status = error?.response?.status;
-        if (status === 404) continue;
+        if (status === 404) {
+           logger.debug('Config download 404', { url });
+           continue;
+        }
         logger.error('Error downloading peer config', { error: error.message, peerId, url });
       }
     }
 
+    logger.error('All config download attempts failed', { peerId });
     return null;
   }
 
