@@ -89,19 +89,27 @@ export class WGDashboardService {
     }
   }
 
-  async applyConfig(): Promise<boolean> {
+  async restartInterface(): Promise<boolean> {
     try {
+      // Пытаемся перезапустить интерфейс через API
+      // В WGDashboard v4.3.0 для этого используется restartWireguardConfiguration
       const response = await this.client.post(
-        `/api/applyConfig/${encodeURIComponent(this.configName)}`
+        `/api/restartWireguardConfiguration/${encodeURIComponent(this.configName)}`
       );
+      
       if (response.data?.status === true) {
-        logger.info('Configuration applied successfully');
+        logger.info('Interface restarted successfully');
         return true;
       }
-      logger.warn('Failed to apply configuration', { response: response.data });
+      
+      logger.warn('Failed to restart interface', { response: response.data });
       return false;
     } catch (error: any) {
-      logger.error('Error applying configuration', { error: error.message });
+      // Игнорируем 404, так как это может означать отсутствие эндпоинта
+      // (в старых версиях может не быть)
+      if (error.response?.status !== 404) {
+        logger.error('Error restarting interface', { error: error.message });
+      }
       return false;
     }
   }
@@ -138,8 +146,8 @@ export class WGDashboardService {
       );
 
       if (response.data?.status === true) {
-        // Apply configuration after adding peer
-        await this.applyConfig();
+        // Restart interface to apply changes
+        await this.restartInterface();
 
         const createdPeer = this.extractCreatedPeerFromResponse(response.data, payload.name);
         if (createdPeer) {
@@ -242,7 +250,7 @@ export class WGDashboardService {
       );
 
       if (response.data?.status === true) {
-        await this.applyConfig();
+        await this.restartInterface();
         return true;
       }
       return false;
@@ -260,7 +268,7 @@ export class WGDashboardService {
       );
 
       if (response.data?.status === true) {
-        await this.applyConfig();
+        await this.restartInterface();
         return true;
       }
       return false;

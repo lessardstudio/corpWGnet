@@ -104,14 +104,16 @@ export class WGDashboardClient {
     }
   }
 
-  async applyConfig(): Promise<boolean> {
+  async restartInterface(): Promise<boolean> {
     try {
       const response = await this.client.post(
-        `/api/applyConfig/${encodeURIComponent(this.configName)}`
+        `/api/restartWireguardConfiguration/${encodeURIComponent(this.configName)}`
       );
       return response.data?.status === true;
     } catch (error: any) {
-      console.error('Error applying configuration:', error.message);
+      if (error.response?.status !== 404) {
+        console.error('Error restarting interface:', error.message);
+      }
       return false;
     }
   }
@@ -124,7 +126,7 @@ export class WGDashboardClient {
       );
 
       if (response.data?.status === true) {
-        await this.applyConfig();
+        await this.restartInterface();
         return true;
       }
       return false;
