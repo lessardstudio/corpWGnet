@@ -61,6 +61,33 @@ describe('WGDashboardService', () => {
     expect(client.get).not.toHaveBeenCalled();
   });
 
+  test('downloadPeerConfig falls back to peers list when download endpoints fail', async () => {
+    const client = {
+      get: jest.fn(),
+      post: jest.fn()
+    };
+
+    (axios as any).create.mockReturnValue(client);
+
+    client.get.mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.startsWith('/api/getPeers')) {
+        return Promise.resolve({
+          data: {
+            status: true,
+            data: [{ public_key: 'pk1', name: 'n1', peer_config: '[Interface]\nPrivateKey = x\n' }]
+          }
+        });
+      }
+      return Promise.reject({ response: { status: 404 } });
+    });
+
+    const svc = new WGDashboardService('http://wgdashboard:10086', 'k', 'wg0');
+    const conf = await svc.downloadPeerConfig('pk1');
+
+    expect(conf).toContain('[Interface]');
+    expect(client.get).toHaveBeenCalled();
+  });
+
   test('addPeer returns created peer from response without calling getPeers', async () => {
     const client = {
       get: jest.fn(),

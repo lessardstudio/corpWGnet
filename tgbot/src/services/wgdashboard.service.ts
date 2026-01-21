@@ -310,6 +310,18 @@ export class WGDashboardService {
     }
 
     logger.error('All config download attempts failed', { peerId, attempts: attemptResults });
+
+    try {
+      const peer = await this.getPeerById(peerId);
+      const configText = peer?.config;
+      if (typeof configText === 'string' && configText.includes('[Interface]')) {
+        logger.info('Config resolved from peers list fallback', { peerId });
+        return configText;
+      }
+    } catch (error: any) {
+      logger.error('Peers list fallback failed', { peerId, error: error.message });
+    }
+
     return null;
   }
 
