@@ -15,6 +15,23 @@ export class ConfigHandler {
     private authService: AuthService
   ) {}
 
+  private getEnv(key: string): string | undefined {
+    return (globalThis as any).process?.env?.[key];
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    if (!ms || ms <= 0) return;
+    await new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private getDelayMs(key: string, defaultValue: number): number {
+    const env = this.getEnv(key);
+    const parsed = env ? parseInt(env, 10) : NaN;
+    if (!Number.isNaN(parsed) && parsed >= 0) return parsed;
+    if (this.getEnv('NODE_ENV') === 'test') return 0;
+    return defaultValue;
+  }
+
   async handleGetConfig(ctx: Context) {
     const userId = ctx.from?.id;
     const username = ctx.from?.username || ctx.from?.first_name || 'User';
@@ -83,7 +100,7 @@ export class ConfigHandler {
       logger.info('Peer created', { peerId: peer.id, name: peerName });
 
       // ВАЖНО: Даём WGDashboard время применить конфигурацию после restart
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await this.sleep(this.getDelayMs('WG_CONFIG_APPLY_DELAY_MS', 2000));
 
       // Получаем конфигурацию
       await ctx.api.editMessageText(
@@ -93,15 +110,35 @@ export class ConfigHandler {
       );
 
       const configFromPeer = typeof peer.config === 'string' ? peer.config : null;
-      let configSource: 'peer' | 'api' = 'api';
+      let configSource: 'peer' | 'peers' | 'api' = 'api';
       let config: string | null = null;
 
-      if (configFromPeer && configFromPeer.includes('[Interface]')) {
+      if (configFromPeer && configFromPeer.includes('[Interface]') && configFromPeer.includes('[Peer]')) {
         configSource = 'peer';
         config = configFromPeer;
       } else {
-        logger.info('Downloading peer config', { peerId: peer.id });
-        config = await this.wgService.downloadPeerConfig(peer.id);
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          const peers = await this.wgService.getPeers();
+          const peersList = Array.isArray(peers) ? peers : [];
+          const resolvedPeer = peersList.find(p => p.id === peer.id) || peersList.find(p => p.name === peerName);
+          const candidateConfig = typeof resolvedPeer?.config === 'string' ? resolvedPeer.config : null;
+
+          if (candidateConfig && candidateConfig.includes('[Interface]') && candidateConfig.includes('[Peer]')) {
+            configSource = 'peers';
+            config = candidateConfig;
+            break;
+          }
+
+          if (attempt < 5) {
+            await this.sleep(this.getDelayMs('WG_CONFIG_RETRY_DELAY_MS', 1000));
+          }
+        }
+
+        if (!config) {
+          logger.info('Downloading peer config', { peerId: peer.id });
+          configSource = 'api';
+          config = await this.wgService.downloadPeerConfig(peer.id);
+        }
       }
       
       if (!config) {

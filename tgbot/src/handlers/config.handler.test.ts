@@ -25,7 +25,8 @@ describe('ConfigHandler', () => {
   beforeEach(() => {
     wgService = {
       addPeer: jest.fn(),
-      downloadPeerConfig: jest.fn()
+      downloadPeerConfig: jest.fn(),
+      getPeers: jest.fn()
     } as any;
 
     managerService = {
@@ -41,6 +42,7 @@ describe('ConfigHandler', () => {
     } as any;
 
     handler = new ConfigHandler(wgService, managerService, qrGenerator, authService);
+    wgService.getPeers.mockResolvedValue([]);
 
     ctx = {
       from: { id: 491, username: 'u1', first_name: 'U' },
@@ -94,6 +96,7 @@ describe('ConfigHandler', () => {
       config: ''
     } as any);
 
+    wgService.getPeers.mockResolvedValue([]);
     wgService.downloadPeerConfig.mockResolvedValue('[Interface]\nPrivateKey = y\nAddress = 10.0.0.3/32\n\n[Peer]\nPublicKey = z\nAllowedIPs = 0.0.0.0/0\n');
     managerService.createShareLink.mockResolvedValue({ id: 'l2', url: 'http://y' } as any);
     qrGenerator.generateQRCode.mockResolvedValue(Buffer.from('qr'));
@@ -101,6 +104,44 @@ describe('ConfigHandler', () => {
     await handler.handleGetConfig(ctx);
 
     expect(wgService.downloadPeerConfig).toHaveBeenCalledWith('pk2');
+    expect(ctx.replyWithDocument).toHaveBeenCalled();
+  });
+
+  it('resolves config from peers list when download is unreliable', async () => {
+    authService.canGetConfig.mockReturnValue(true);
+    (globalThis as any).process = (globalThis as any).process || {};
+    (globalThis as any).process.env = { ...(globalThis as any).process.env, WG_ENDPOINT: 'vpn.example.com:51820' };
+
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1);
+    wgService.addPeer.mockImplementation(async (options: any) => ({
+      id: 'pkX',
+      name: options?.name,
+      publicKey: 'pkX',
+      allowedIPs: [],
+      config: ''
+    }) as any);
+
+    wgService.getPeers.mockResolvedValue([
+      {
+        id: 'peer-real-id',
+        name: 'TG_u1_1',
+        publicKey: 'peer-real-id',
+        allowedIPs: [],
+        config: '[Interface]\nPrivateKey = x\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = y\nAllowedIPs = 0.0.0.0/0\n'
+      } as any
+    ]);
+
+    managerService.createShareLink.mockResolvedValue({ id: 'l3', url: 'http://z' } as any);
+    qrGenerator.generateQRCode.mockResolvedValue(Buffer.from('qr'));
+
+    await handler.handleGetConfig(ctx);
+    nowSpy.mockRestore();
+
+    expect(wgService.downloadPeerConfig).not.toHaveBeenCalled();
+    expect(managerService.createShareLink).toHaveBeenCalledWith(
+      'pkX',
+      expect.objectContaining({ config: expect.stringContaining('Endpoint = vpn.example.com:51820') })
+    );
     expect(ctx.replyWithDocument).toHaveBeenCalled();
   });
 
@@ -112,7 +153,7 @@ describe('ConfigHandler', () => {
       name: 'n3',
       publicKey: 'pk3',
       allowedIPs: [],
-      config: '[Interface]\nPrivateKey = x\nListenPort = 51820\n'
+      config: '[Interface]\nPrivateKey = x\nListenPort = 51820\n\n[Peer]\nPublicKey = y\nAllowedIPs = 10.0.0.2/32\n'
     } as any);
 
     await handler.handleGetConfig(ctx);
