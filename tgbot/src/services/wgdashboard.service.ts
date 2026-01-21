@@ -39,10 +39,10 @@ export class WGDashboardService {
     presharedKey?: boolean;
   }): Promise<WireGuardPeer | null> {
     try {
-      const dns = options.dns || process.env.WG_DNS || '1.1.1.1';
-      const endpointAllowedIp = options.endpointAllowedIp || process.env.WG_ALLOWED_IPS || '0.0.0.0/0';
-      const keepalive = options.keepalive || parseInt(process.env.WG_KEEPALIVE || '21', 10);
-      const mtu = options.mtu || parseInt(process.env.WG_MTU || '1420', 10);
+      const dns = options.dns || (process.env.WG_DNS ? process.env.WG_DNS : '1.1.1.1');
+      const endpointAllowedIp = options.endpointAllowedIp || (process.env.WG_ALLOWED_IPS ? process.env.WG_ALLOWED_IPS : '0.0.0.0/0');
+      const keepalive = options.keepalive || parseInt((process.env.WG_KEEPALIVE ? process.env.WG_KEEPALIVE : '21'), 10);
+      const mtu = options.mtu || parseInt((process.env.WG_MTU ? process.env.WG_MTU : '1420'), 10);
 
       const payload = {
         bulkAdd: false,
