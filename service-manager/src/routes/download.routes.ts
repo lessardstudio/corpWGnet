@@ -15,7 +15,7 @@ export function createDownloadRouter(
       const link = db.getShareLink(id);
 
       if (!link || !link.isActive) {
-        return res.status(404).send(`
+        res.status(404).send(`
           <!DOCTYPE html>
           <html>
           <head>
@@ -32,12 +32,13 @@ export function createDownloadRouter(
           </body>
           </html>
         `);
+        return;
       }
 
       // Проверяем срок действия
       if (Date.now() > link.expiresAt) {
         db.deactivateLink(id);
-        return res.status(410).send(`
+        res.status(410).send(`
           <!DOCTYPE html>
           <html>
           <head>
@@ -54,12 +55,13 @@ export function createDownloadRouter(
           </body>
           </html>
         `);
+        return;
       }
 
       // Проверяем лимит использования
       if (link.usageCount >= link.maxUsageCount) {
         db.deactivateLink(id);
-        return res.status(410).send(`
+        res.status(410).send(`
           <!DOCTYPE html>
           <html>
           <head>
@@ -76,6 +78,7 @@ export function createDownloadRouter(
           </body>
           </html>
         `);
+        return;
       }
 
       // Получаем конфигурацию
@@ -83,7 +86,7 @@ export function createDownloadRouter(
 
       if (!config) {
         logger.error('Failed to fetch peer config', { peerId: link.peerId });
-        return res.status(500).send(`
+        res.status(500).send(`
           <!DOCTYPE html>
           <html>
           <head>
@@ -100,6 +103,7 @@ export function createDownloadRouter(
           </body>
           </html>
         `);
+        return;
       }
 
       // Логируем использование
