@@ -12,6 +12,8 @@ import { AuthHandler } from './handlers/auth.handler';
 
 async function main() {
   try {
+    const nodeProcess = (globalThis as any).process;
+
     // Загружаем конфигурацию
     const config = loadConfig();
     logger.info('Configuration loaded successfully', {
@@ -34,7 +36,7 @@ async function main() {
     const qrGenerator = new QRCodeGenerator();
     
     // Инициализируем AuthService
-    const dbPath = process.env.AUTH_DB_PATH || '/app/data/auth.sqlite';
+    const dbPath = nodeProcess?.env?.AUTH_DB_PATH || '/app/data/auth.sqlite';
     const authService = new AuthService(
       dbPath,
       config.authMode,
@@ -43,10 +45,13 @@ async function main() {
     );
 
     // Проверяем подключение к WGDashboard
-    const isConnected = await wgService.handshake();
-    if (!isConnected) {
+    let isConnected = await wgService.handshake();
+    let retryDelayMs = 1000;
+    while (!isConnected) {
       logger.error('Failed to connect to WGDashboard');
-      process.exit(1);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      retryDelayMs = Math.min(retryDelayMs * 2, 15000);
+      isConnected = await wgService.handshake();
     }
     logger.info('Successfully connected to WGDashboard');
 
@@ -167,12 +172,12 @@ Bot is ready to accept commands!
     });
 
     // Обработка сигналов завершения
-    process.once('SIGINT', () => {
+    nodeProcess?.once?.('SIGINT', () => {
       logger.info('Received SIGINT, stopping bot...');
       bot.stop();
     });
     
-    process.once('SIGTERM', () => {
+    nodeProcess?.once?.('SIGTERM', () => {
       logger.info('Received SIGTERM, stopping bot...');
       bot.stop();
     });
@@ -182,7 +187,7 @@ Bot is ready to accept commands!
       error: error.message,
       stack: error.stack 
     });
-    process.exit(1);
+    (globalThis as any).process?.exit?.(1);
   }
 }
 

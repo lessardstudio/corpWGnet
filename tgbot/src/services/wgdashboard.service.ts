@@ -1,23 +1,82 @@
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
 import { WireGuardPeer } from '../types';
 import logger from '../utils/logger';
 
 export class WGDashboardService {
-  private client: AxiosInstance;
+  private client: any;
   private configName: string;
 
   constructor(baseUrl: string, apiKey: string, configName: string) {
-    this.client = axios.create({
-      baseURL: baseUrl,
+    this.client = (axios as any).create({
+      baseURL: baseUrl?.trim?.() ? baseUrl.trim() : baseUrl,
       headers: {
         'Content-Type': 'application/json',
-        'wg-dashboard-apikey': apiKey
+        'wg-dashboard-apikey': apiKey?.trim?.() ? apiKey.trim() : apiKey
       },
       timeout: 30000
     });
-    this.configName = configName;
+    this.configName = configName?.trim?.() ? configName.trim() : configName;
     
     logger.info('WGDashboard service initialized', { baseUrl, configName });
+  }
+
+  private getEnvValue(key: string): string | undefined {
+    const env = (globalThis as any).process?.env;
+    return typeof env?.[key] === 'string' ? env[key] : undefined;
+  }
+
+  private extractPeersFromResponse(data: any): any[] | null {
+    if (!data) return null;
+    if (data?.status === true && Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.peers)) return data.peers;
+    if (Array.isArray(data?.data?.peers)) return data.data.peers;
+    return null;
+  }
+
+  private extractCreatedPeerFromResponse(data: any, fallbackName: string): WireGuardPeer | null {
+    if (!data || data?.status !== true) return null;
+
+    const candidate =
+      data?.data && typeof data.data === 'object' ? data.data :
+      data?.peer && typeof data.peer === 'object' ? data.peer :
+      null;
+
+    if (!candidate) return null;
+
+    const id =
+      candidate.id ??
+      candidate.peerId ??
+      candidate.peer_id ??
+      candidate.publicKey ??
+      candidate.public_key ??
+      candidate.PublicKey;
+
+    if (!id) return null;
+
+    const name = candidate.name ?? fallbackName;
+
+    const publicKey =
+      candidate.publicKey ??
+      candidate.public_key ??
+      candidate.PublicKey ??
+      '';
+
+    const allowedIPs =
+      candidate.allowedIPs ??
+      candidate.allowed_ips ??
+      candidate.AllowedIPs ??
+      [];
+
+    const config = candidate.config ?? candidate.peerConfig ?? candidate.peer_config ?? '';
+
+    return {
+      id: String(id),
+      name: String(name),
+      publicKey: String(publicKey),
+      allowedIPs: Array.isArray(allowedIPs) ? allowedIPs.map((v: any) => String(v)) : [],
+      config: String(config)
+    };
   }
 
   async handshake(): Promise<boolean> {
@@ -39,10 +98,10 @@ export class WGDashboardService {
     presharedKey?: boolean;
   }): Promise<WireGuardPeer | null> {
     try {
-      const dns = options.dns || (process.env.WG_DNS ? process.env.WG_DNS : '1.1.1.1');
-      const endpointAllowedIp = options.endpointAllowedIp || (process.env.WG_ALLOWED_IPS ? process.env.WG_ALLOWED_IPS : '0.0.0.0/0');
-      const keepalive = options.keepalive || parseInt((process.env.WG_KEEPALIVE ? process.env.WG_KEEPALIVE : '21'), 10);
-      const mtu = options.mtu || parseInt((process.env.WG_MTU ? process.env.WG_MTU : '1420'), 10);
+      const dns = options.dns || (this.getEnvValue('WG_DNS') || '1.1.1.1');
+      const endpointAllowedIp = options.endpointAllowedIp || (this.getEnvValue('WG_ALLOWED_IPS') || '0.0.0.0/0');
+      const keepalive = options.keepalive || parseInt((this.getEnvValue('WG_KEEPALIVE') || '21'), 10);
+      const mtu = options.mtu || parseInt((this.getEnvValue('WG_MTU') || '1420'), 10);
 
       const payload = {
         bulkAdd: false,
@@ -62,10 +121,14 @@ export class WGDashboardService {
       );
 
       if (response.data?.status === true) {
+        const createdPeer = this.extractCreatedPeerFromResponse(response.data, payload.name);
+        if (createdPeer) {
+          logger.info('Peer created successfully', { peerId: createdPeer.id });
+          return createdPeer;
+        }
+
         logger.info('Peer created successfully');
-        // Получаем информацию о созданном пире
         const peers = await this.getPeers();
-        // Возвращаем последний созданный пир
         return peers[peers.length - 1] || null;
       }
 
@@ -81,20 +144,37 @@ export class WGDashboardService {
   }
 
   async getPeers(): Promise<WireGuardPeer[]> {
-    try {
-      const response = await this.client.get(
-        `/api/getPeers/${encodeURIComponent(this.configName)}`
-      );
+    const candidates: Array<{ method: 'get' | 'post'; url: string; data?: any }> = [
+      { method: 'get', url: `/api/getPeers/${encodeURIComponent(this.configName)}` },
+      { method: 'get', url: `/api/getPeers?configName=${encodeURIComponent(this.configName)}` },
+      { method: 'get', url: `/api/getPeers?configuration=${encodeURIComponent(this.configName)}` },
+      { method: 'get', url: `/api/getPeers?config=${encodeURIComponent(this.configName)}` },
+      { method: 'post', url: `/api/getPeers`, data: { configName: this.configName } },
+      { method: 'post', url: `/api/getPeers`, data: { configuration: this.configName } },
+      { method: 'get', url: `/api/getWireguardConfiguration/${encodeURIComponent(this.configName)}` },
+      { method: 'get', url: `/api/getWireguardConfigurations/${encodeURIComponent(this.configName)}` }
+    ];
 
-      if (response.data?.status === true && Array.isArray(response.data.data)) {
-        return response.data.data;
+    for (const candidate of candidates) {
+      try {
+        const response =
+          candidate.method === 'get'
+            ? await this.client.get(candidate.url)
+            : await this.client.post(candidate.url, candidate.data);
+
+        const peers = this.extractPeersFromResponse(response.data);
+        if (peers) {
+          return peers as any;
+        }
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 404) continue;
+        logger.error('Error fetching peers', { error, candidate });
+        return [];
       }
-
-      return [];
-    } catch (error) {
-      logger.error('Error fetching peers', { error });
-      return [];
     }
+
+    return [];
   }
 
   async getPeerById(peerId: string): Promise<WireGuardPeer | null> {
@@ -108,22 +188,30 @@ export class WGDashboardService {
   }
 
   async downloadPeerConfig(peerId: string): Promise<string | null> {
-    try {
-      const response = await this.client.get(
-        `/api/downloadPeer/${encodeURIComponent(this.configName)}/${encodeURIComponent(peerId)}`
-      );
+    const urls = [
+      `/api/downloadPeer/${encodeURIComponent(this.configName)}/${encodeURIComponent(peerId)}`,
+      `/api/downloadPeer/${encodeURIComponent(peerId)}`,
+      `/api/download/${encodeURIComponent(peerId)}`
+    ];
 
-      if (response.data) {
-        return typeof response.data === 'string' 
-          ? response.data 
-          : JSON.stringify(response.data);
+    for (const url of urls) {
+      try {
+        const response = await this.client.get(url);
+
+        if (response.data) {
+          return typeof response.data === 'string'
+            ? response.data
+            : JSON.stringify(response.data);
+        }
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 404) continue;
+        logger.error('Error downloading peer config', { error, peerId, url });
+        return null;
       }
-
-      return null;
-    } catch (error) {
-      logger.error('Error downloading peer config', { error, peerId });
-      return null;
     }
+
+    return null;
   }
 
   async deletePeer(peerId: string): Promise<boolean> {
