@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # WGDashboard - основная панель управления WireGuard
+  wgdashboard:
+    image: ghcr.io/wgdashboard/wgdashboard:latest
+    restart: unless-stopped
+    container_name: wgdashboard
+    ports:
+      - 10086:10086/tcp
+      - 51820:51820/udp
+    volumes:
+      - aconf:/etc/amnezia/amneziawg
+      - conf:/etc/wireguard
+      - data:/data
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - wg-network
+
+  # Telegram Bot - бот для выдачи конфигов пользователям
+  tgbot:
+    build:
+      context: ./tgbot
+      dockerfile: Dockerfile
+    container_name: wg-tgbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - service-manager
+    networks:
+      - wg-network
+    volumes:
+      - ./tgbot/logs:/app/logs
+      - ./tgbot/data:/app/data
+
+  # Service Manager - API для управления WGDashboard и выдачи конфигов
+  service-manager:
+    build:
+      context: ./service-manager
+      dockerfile: Dockerfile
+    container_name: wg-service-manager
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+    env_file:
+      - .env
+    depends_on:
+      - wgdashboard
+    networks:
+      - wg-network
+    volumes:
+      - ./service-manager/data:/app/data
+      - ./service-manager/logs:/app/logs
+
+networks:
+  wg-network:
+    driver: bridge
+
+volumes:
+  aconf:
+  conf:
+  data:
