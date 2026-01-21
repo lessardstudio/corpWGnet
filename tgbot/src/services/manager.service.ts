@@ -22,20 +22,29 @@ export class ServiceManagerClient {
     options: {
       expiryHours?: number;
       maxUsage?: number;
+      config?: string; // Add config content support
     } = {}
   ): Promise<ShareLink | null> {
     try {
-      const response = await this.client.post('/api/links', {
+      const payload: any = {
         peerId,
         expiryHours: options.expiryHours || 24,
         maxUsage: options.maxUsage || 1
-      });
+      };
+      
+      // If config content is provided, pass it (Service Manager might need it to serve the file)
+      if (options.config) {
+        payload.config = options.config;
+      }
+
+      const response = await this.client.post('/api/links', payload);
 
       return response.data;
     } catch (error: any) {
       logger.error('Error creating share link', { 
         error: error.message,
-        response: error.response?.data 
+        response: error.response?.data,
+        payload: { peerId, ...options }
       });
       return null;
     }

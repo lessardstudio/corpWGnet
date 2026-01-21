@@ -226,9 +226,22 @@ export class WGDashboardService {
 
     for (const url of urls) {
       try {
-        const response = await this.client.get(url);
+        const response = await this.client.get(url, {
+          responseType: 'text' // Force text response to avoid auto-JSON parsing issues
+        });
 
         if (response.data) {
+          // Check if response is JSON error despite text request
+          if (typeof response.data === 'string' && response.data.trim().startsWith('{')) {
+             try {
+               const json = JSON.parse(response.data);
+               if (json.status === false) continue;
+             } catch (e) {
+               // Not valid JSON, probably config file
+               return response.data;
+             }
+          }
+          
           return typeof response.data === 'string'
             ? response.data
             : JSON.stringify(response.data);
@@ -236,8 +249,7 @@ export class WGDashboardService {
       } catch (error: any) {
         const status = error?.response?.status;
         if (status === 404) continue;
-        logger.error('Error downloading peer config', { error, peerId, url });
-        return null;
+        logger.error('Error downloading peer config', { error: error.message, peerId, url });
       }
     }
 

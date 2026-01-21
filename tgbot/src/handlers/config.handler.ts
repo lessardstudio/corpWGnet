@@ -92,7 +92,8 @@ export class ConfigHandler {
       // Создаем share link
       const shareLink = await this.managerService.createShareLink(peer.id, {
         expiryHours: 24,
-        maxUsage: 3
+        maxUsage: 3,
+        config: config // Pass the actual config content
       });
 
       // Генерируем QR код
