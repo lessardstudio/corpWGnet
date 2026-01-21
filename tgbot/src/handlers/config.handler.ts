@@ -69,6 +69,16 @@ export class ConfigHandler {
         return;
       }
 
+      if (!peer.id) {
+        logger.error('Peer created but missing id', { name: peerName, peer });
+        await ctx.api.editMessageText(
+          ctx.chat!.id,
+          statusMsg.message_id,
+          '❌ Ошибка при создании конфигурации (peerId отсутствует). Попробуйте позже.'
+        );
+        return;
+      }
+
       logger.info('Peer created', { peerId: peer.id, name: peerName });
 
       // Получаем конфигурацию
@@ -81,6 +91,7 @@ export class ConfigHandler {
       const config = await this.wgService.downloadPeerConfig(peer.id);
       
       if (!config) {
+        logger.error('Failed to download peer config', { peerId: peer.id, name: peerName });
         await ctx.api.editMessageText(
           ctx.chat!.id,
           statusMsg.message_id,

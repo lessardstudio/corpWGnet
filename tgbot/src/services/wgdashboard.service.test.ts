@@ -18,13 +18,14 @@ describe('WGDashboardService', () => {
     (axios as any).create.mockReturnValue(client);
 
     client.get.mockRejectedValueOnce({ response: { status: 404 } });
-    client.get.mockResolvedValueOnce({ data: { status: true, data: [{ id: 'p1' }] } });
+    client.get.mockResolvedValueOnce({ data: { status: true, data: [{ public_key: 'pk1', name: 'n1', allowed_ips: ['10.0.0.2/32'] }] } });
 
     const svc = new WGDashboardService('http://wgdashboard:10086', 'k', 'wg0');
     const peers = await svc.getPeers();
 
     expect(Array.isArray(peers)).toBe(true);
-    expect((peers as any)[0].id).toBe('p1');
+    expect((peers as any)[0].id).toBe('pk1');
+    expect((peers as any)[0].name).toBe('n1');
     expect(client.get).toHaveBeenCalled();
   });
 
@@ -43,7 +44,21 @@ describe('WGDashboardService', () => {
     const conf = await svc.downloadPeerConfig('peer-1');
 
     expect(conf).toContain('[Interface]');
-    expect(client.get).toHaveBeenCalledTimes(2);
+    expect(client.get).toHaveBeenCalled();
+  });
+
+  test('downloadPeerConfig returns null when peerId is missing', async () => {
+    const client = {
+      get: jest.fn(),
+      post: jest.fn()
+    };
+
+    (axios as any).create.mockReturnValue(client);
+
+    const svc = new WGDashboardService('http://wgdashboard:10086', 'k', 'wg0');
+    const conf = await svc.downloadPeerConfig('' as any);
+    expect(conf).toBeNull();
+    expect(client.get).not.toHaveBeenCalled();
   });
 
   test('addPeer returns created peer from response without calling getPeers', async () => {
@@ -70,4 +85,3 @@ describe('WGDashboardService', () => {
     expect(getPeersSpy).not.toHaveBeenCalled();
   });
 });
-

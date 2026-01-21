@@ -34,41 +34,36 @@ export class WGDashboardService {
     return null;
   }
 
-  private extractCreatedPeerFromResponse(data: any, fallbackName: string): WireGuardPeer | null {
-    if (!data || data?.status !== true) return null;
-
-    const candidate =
-      data?.data && typeof data.data === 'object' ? data.data :
-      data?.peer && typeof data.peer === 'object' ? data.peer :
-      null;
-
-    if (!candidate) return null;
+  private normalizePeer(raw: any): WireGuardPeer | null {
+    if (!raw || typeof raw !== 'object') return null;
 
     const id =
-      candidate.id ??
-      candidate.peerId ??
-      candidate.peer_id ??
-      candidate.publicKey ??
-      candidate.public_key ??
-      candidate.PublicKey;
+      raw.id ??
+      raw.peerId ??
+      raw.peer_id ??
+      raw.publicKey ??
+      raw.public_key ??
+      raw.PublicKey ??
+      raw.key ??
+      raw.Key;
 
     if (!id) return null;
 
-    const name = candidate.name ?? fallbackName;
+    const name = raw.name ?? raw.Name ?? '';
 
     const publicKey =
-      candidate.publicKey ??
-      candidate.public_key ??
-      candidate.PublicKey ??
+      raw.publicKey ??
+      raw.public_key ??
+      raw.PublicKey ??
       '';
 
     const allowedIPs =
-      candidate.allowedIPs ??
-      candidate.allowed_ips ??
-      candidate.AllowedIPs ??
+      raw.allowedIPs ??
+      raw.allowed_ips ??
+      raw.AllowedIPs ??
       [];
 
-    const config = candidate.config ?? candidate.peerConfig ?? candidate.peer_config ?? '';
+    const config = raw.config ?? raw.peerConfig ?? raw.peer_config ?? '';
 
     return {
       id: String(id),
@@ -76,6 +71,30 @@ export class WGDashboardService {
       publicKey: String(publicKey),
       allowedIPs: Array.isArray(allowedIPs) ? allowedIPs.map((v: any) => String(v)) : [],
       config: String(config)
+    };
+  }
+
+  private extractCreatedPeerFromResponse(data: any, fallbackName: string): WireGuardPeer | null {
+    if (!data || data?.status !== true) return null;
+
+    const base =
+      data?.data && typeof data.data === 'object' ? data.data :
+      data?.peer && typeof data.peer === 'object' ? data.peer :
+      null;
+
+    if (!base) return null;
+
+    const candidate =
+      Array.isArray((base as any).peers) ? (base as any).peers[0] :
+      Array.isArray((base as any).data) ? (base as any).data[0] :
+      base;
+
+    const normalized = this.normalizePeer(candidate);
+    if (!normalized) return null;
+
+    return {
+      ...normalized,
+      name: normalized.name || String(fallbackName)
     };
   }
 
@@ -159,7 +178,8 @@ export class WGDashboardService {
 
         logger.info('Peer created successfully, fetching list...');
         const peers = await this.getPeers();
-        return peers[peers.length - 1] || null;
+        const byName = peers.find(p => p.name === payload.name);
+        return byName || peers[peers.length - 1] || null;
       }
 
       logger.error('Failed to create peer', { response: response.data });
@@ -195,7 +215,11 @@ export class WGDashboardService {
 
         const peers = this.extractPeersFromResponse(response.data);
         if (peers) {
-          return peers as any;
+          const normalized = (peers as any[])
+            .map((p) => this.normalizePeer(p))
+            .filter((p): p is WireGuardPeer => !!p);
+
+          if (normalized.length > 0) return normalized;
         }
       } catch (error: any) {
         const status = error?.response?.status || error?.status;
@@ -218,53 +242,74 @@ export class WGDashboardService {
   }
 
   async downloadPeerConfig(peerId: string): Promise<string | null> {
-    // Ensure peerId is properly encoded, especially if it's a public key ending with '='
-    const encodedPeerId = encodeURIComponent(peerId);
-    
-    const urls = [
-      `/api/downloadPeer/${encodeURIComponent(this.configName)}/${encodedPeerId}`,
-      `/api/downloadPeer/${encodedPeerId}`,
-      `/api/download/${encodedPeerId}`
-    ];
-
-    logger.debug('Attempting to download config', { peerId, urls });
-
-    for (const url of urls) {
-      try {
-        const response = await this.client.get(url, {
-          responseType: 'text'
-        });
-
-        if (response.data) {
-          // Check if response is JSON error
-          if (typeof response.data === 'string' && response.data.trim().startsWith('{')) {
-             try {
-               const json = JSON.parse(response.data);
-               if (json.status === false) {
-                 logger.debug('Config download returned JSON error', { url, json });
-                 continue;
-               }
-             } catch (e) {
-               // Not valid JSON, treat as config content
-             }
-          }
-          
-          logger.info('Config downloaded successfully', { url });
-          return typeof response.data === 'string'
-            ? response.data
-            : JSON.stringify(response.data);
-        }
-      } catch (error: any) {
-        const status = error?.response?.status;
-        if (status === 404) {
-           logger.debug('Config download 404', { url });
-           continue;
-        }
-        logger.error('Error downloading peer config', { error: error.message, peerId, url });
-      }
+    if (!peerId || peerId === 'undefined' || peerId === 'null') {
+      logger.error('All config download attempts failed', { peerId });
+      return null;
     }
 
-    logger.error('All config download attempts failed', { peerId });
+    const encodedPeerId = encodeURIComponent(peerId);
+    const doublyEncodedPeerId = encodeURIComponent(encodedPeerId);
+
+    const peerIdVariants = Array.from(new Set([peerId, encodedPeerId, doublyEncodedPeerId]));
+
+    const attemptResults: Array<{ url: string; status?: number; bodySnippet?: string }> = [];
+
+    const buildUrls = (variant: string) => ([
+      `/api/downloadPeer/${encodeURIComponent(this.configName)}/${variant}`,
+      `/api/downloadPeer/${variant}`,
+      `/api/download/${variant}`,
+      `/api/downloadPeer/${encodeURIComponent(this.configName)}?peerId=${variant}`,
+      `/api/downloadPeer/${encodeURIComponent(this.configName)}?peerID=${variant}`,
+      `/api/downloadPeers/${encodeURIComponent(this.configName)}`
+    ]);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (const variant of peerIdVariants) {
+        const urls = buildUrls(variant);
+
+        for (const url of urls) {
+          try {
+            const response = await this.client.get(url, { responseType: 'text' });
+
+            const data = response.data;
+            if (!data) {
+              attemptResults.push({ url, status: response.status });
+              continue;
+            }
+
+            if (typeof data === 'string' && data.trim().startsWith('{')) {
+              try {
+                const json = JSON.parse(data);
+                if (json?.status === false) {
+                  attemptResults.push({ url, status: response.status, bodySnippet: JSON.stringify(json).slice(0, 200) });
+                  continue;
+                }
+              } catch {
+              }
+            }
+
+            logger.info('Config downloaded successfully', { url });
+            return typeof data === 'string' ? data : JSON.stringify(data);
+          } catch (error: any) {
+            const status = error?.response?.status ?? error?.status;
+            const body = error?.response?.data;
+            const bodySnippet =
+              typeof body === 'string'
+                ? body.slice(0, 200)
+                : body && typeof body === 'object'
+                  ? JSON.stringify(body).slice(0, 200)
+                  : undefined;
+
+            attemptResults.push({ url, status, bodySnippet });
+            if (status === 404) continue;
+          }
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+
+    logger.error('All config download attempts failed', { peerId, attempts: attemptResults });
     return null;
   }
 
