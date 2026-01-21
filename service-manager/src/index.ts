@@ -17,9 +17,9 @@ const DB_PATH = process.env.DB_PATH || '/app/data/database.sqlite';
 // Инициализация сервисов
 const db = new DatabaseService(DB_PATH);
 const wgClient = new WGDashboardClient(
-  process.env.WGDASHBOARD_URL || 'http://wgdashboard:10086',
-  process.env.WGDASHBOARD_API_KEY || '',
-  process.env.WGDASHBOARD_CONFIG_NAME || 'wg0'
+  (process.env.WGDASHBOARD_URL || 'http://wgdashboard:10086').trim(),
+  (process.env.WGDASHBOARD_API_KEY || '').trim(),
+  (process.env.WGDASHBOARD_CONFIG_NAME || 'wg0').trim()
 );
 
 const app: Express = express();

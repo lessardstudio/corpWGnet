@@ -25,9 +25,9 @@ async function main() {
 
     // Инициализируем сервисы
     const wgService = new WGDashboardService(
-      config.wgDashboardUrl,
-      config.wgDashboardApiKey,
-      config.wgConfigName
+      (config.wgDashboardUrl).trim(),
+      (config.wgDashboardApiKey).trim(),
+      (config.wgConfigName).trim()
     );
 
     const managerService = new ServiceManagerClient(config.serviceManagerUrl);

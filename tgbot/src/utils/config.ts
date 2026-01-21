@@ -30,10 +30,10 @@ export const loadConfig = (): Config => {
       .split(',')
       .map(id => parseInt(id.trim(), 10))
       .filter(id => !isNaN(id)),
-    serviceManagerUrl: process.env.SERVICE_MANAGER_URL || 'http://service-manager:3000',
-    wgDashboardUrl: process.env.WGDASHBOARD_URL!,
-    wgDashboardApiKey: process.env.WGDASHBOARD_API_KEY!,
-    wgConfigName: process.env.WGDASHBOARD_CONFIG_NAME!,
+    serviceManagerUrl: (process.env.SERVICE_MANAGER_URL || 'http://service-manager:3000').trim(),
+    wgDashboardUrl: process.env.WGDASHBOARD_URL!.trim(),
+    wgDashboardApiKey: process.env.WGDASHBOARD_API_KEY!.trim(),
+    wgConfigName: process.env.WGDASHBOARD_CONFIG_NAME!.trim(),
     authMode,
     allowedUserIds
   };
