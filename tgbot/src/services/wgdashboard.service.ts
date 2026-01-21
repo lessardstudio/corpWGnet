@@ -145,6 +145,8 @@ export class WGDashboardService {
         payload
       );
 
+      logger.debug('addPeer response', { data: response.data });
+
       if (response.data?.status === true) {
         // Restart interface to apply changes
         await this.restartInterface();
@@ -180,7 +182,8 @@ export class WGDashboardService {
       { method: 'post', url: `/api/getPeers`, data: { configName: this.configName } },
       { method: 'post', url: `/api/getPeers`, data: { configuration: this.configName } },
       { method: 'get', url: `/api/getWireguardConfiguration/${encodeURIComponent(this.configName)}` },
-      { method: 'get', url: `/api/getWireguardConfigurations/${encodeURIComponent(this.configName)}` }
+      { method: 'get', url: `/api/getWireguardConfigurations/${encodeURIComponent(this.configName)}` },
+      { method: 'get', url: `/api/getWireguardConfigurations` }
     ];
 
     for (const candidate of candidates) {
@@ -195,10 +198,9 @@ export class WGDashboardService {
           return peers as any;
         }
       } catch (error: any) {
-        const status = error?.response?.status;
+        const status = error?.response?.status || error?.status;
         if (status === 404) continue;
-        logger.error('Error fetching peers', { error, candidate });
-        return [];
+        logger.error('Error fetching peers', { error: error.message, candidate });
       }
     }
 
