@@ -9,7 +9,6 @@ import { handleStart, handleHelp } from './handlers/start.handler';
 import { ConfigHandler } from './handlers/config.handler';
 import { AdminHandler } from './handlers/admin.handler';
 import { AuthHandler } from './handlers/auth.handler';
-import path from 'path';
 
 async function main() {
   try {

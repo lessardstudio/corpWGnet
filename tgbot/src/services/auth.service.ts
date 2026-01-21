@@ -1,5 +1,4 @@
 import Database from 'better-sqlite3';
-import path from 'path';
 import { AccessRequest } from '../types';
 import logger from '../utils/logger';
 
