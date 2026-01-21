@@ -1,10 +1,15 @@
 import winston from 'winston';
 import path from 'path';
 
-const logDir = process.env.LOG_DIR || '/app/logs';
+// Safe process.env access helper
+const getEnv = (key: string): string | undefined => {
+  return (globalThis as any).process?.env?.[key];
+};
+
+const logDir = getEnv('LOG_DIR') || '/app/logs';
 
 export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: getEnv('LOG_LEVEL') || 'info',
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
